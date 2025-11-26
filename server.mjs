@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import Brevo from "@getbrevo/brevo";
+import axios from "axios";
 
 console.log("Server starting...");
 
@@ -15,20 +16,49 @@ apiInstance.setApiKey(
   process.env.BREVO_API_KEY
 );
 
-// TRACK VISITOR API
 app.post("/track-visitor", async (req, res) => {
   try {
     const browser = req.body.browser || "Unknown browser";
     const time = new Date().toLocaleString();
 
+    // Get visitor IP (supports Render proxies)
+    const userIp =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.connection.remoteAddress ||
+      "UNKNOWN";
+
+    // Fetch Location using IPINFO
+    const ipinfo = await axios.get(
+      `https://ipinfo.io/${userIp}?token=6df68ee082e69e`
+    );
+
+    const info = ipinfo.data;
+
+    const locationText = `
+IP: ${info.ip}
+City: ${info.city}
+Region: ${info.region}
+Country: ${info.country}
+Location: ${info.loc}
+Org: ${info.org}
+Timezone: ${info.timezone}
+    `;
+
+    // Send Email
     await apiInstance.sendTransacEmail({
       sender: { email: process.env.SMTP_FROM },
       to: [{ email: process.env.EMAIL_TO }],
       subject: "New Portfolio Visitor",
-      textContent: `Browser: ${browser}\nTime: ${time}`
+      textContent: `
+Browser: ${browser}
+Time: ${time}
+
+===== LOCATION DETAILS =====
+${locationText}
+      `,
     });
 
-    console.log("Email sent via Brevo API!");
+    console.log("Email sent with location!");
     res.json({ success: true });
 
   } catch (error) {
