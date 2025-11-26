@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import nodemailer from "nodemailer";
-import axios from "axios";
 
 console.log("Server starting...");
 
@@ -9,23 +8,22 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ------------ BREVO SMTP EMAIL CONFIG --------------
+// BREVO SMTP EMAIL CONFIG
 const transporter = nodemailer.createTransport({
   host: "smtp-relay.brevo.com",
   port: 587,
   auth: {
-    user: "9c2d43001@smtp-brevo.com",
-    pass: "Bq21NRlcrMgJhk48",
+    user: process.env.BREVO_USER,
+    pass: process.env.BREVO_PASS,
   },
   tls: {
     rejectUnauthorized: false
   }
 });
 
-
 console.log("Brevo transporter created.");
 
-// VERIFY SMTP (VERY IMPORTANT)
+// VERIFY SMTP
 transporter.verify((error, success) => {
   if (error) {
     console.log("SMTP ERROR:", error);
@@ -34,31 +32,27 @@ transporter.verify((error, success) => {
   }
 });
 
-// ------------ TRACK VISITOR API ---------------------
+// TRACK VISITOR API
 app.post("/track-visitor", async (req, res) => {
-  console.log("Track visitor hit.");
+  try {
+    const browser = req.body.browser || "Unknown browser";
+    const time = new Date().toLocaleString();
 
-  const response = await axios.get("https://ipinfo.io/json?token=6df68ee082e69e");
-  const info = response.data;
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: process.env.EMAIL_TO,
+      subject: `New Portfolio Visitor`,
+      text: `Browser: ${browser}\nTime: ${time}`,
+    });
 
-  console.log("IPInfo data:", info);
+    console.log("Email sent!");
+    res.json({ success: true });
 
-  const browser = req.body.browser || "Unknown browser";
-  const time = new Date().toLocaleString();
-
-  console.log("Sending email...");
-
-  await transporter.sendMail({
-    from: "portfolio@brevo.com",
-    to: "praveenchennu547@gmail.com",
-    subject: `New Portfolio Visitor - ${info.ip}`,
-    text: `Visitor details:\n${JSON.stringify(info, null, 2)}\nBrowser:${browser}\nTime:${time}`,
-  });
-
-  console.log("Email sent!");
-
-  res.json({ success: true });
+  } catch (err) {
+    console.error("Error sending email:", err);
+    res.status(500).json({ success: false, error: "Email sending failed" });
+  }
 });
 
-// ------------------ START SERVER ---------------------
+// START SERVER
 app.listen(5000, () => console.log("Backend running on port 5000"));
