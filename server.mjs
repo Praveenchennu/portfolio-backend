@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import nodemailer from "nodemailer";
+import Brevo from "@getbrevo/brevo";
 
 console.log("Server starting...");
 
@@ -8,29 +8,12 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// BREVO SMTP EMAIL CONFIG
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  auth: {
-    user: process.env.BREVO_USER,
-    pass: process.env.BREVO_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
-
-console.log("Brevo transporter created.");
-
-// VERIFY SMTP
-transporter.verify((error, success) => {
-  if (error) {
-    console.log("SMTP ERROR:", error);
-  } else {
-    console.log("SMTP READY");
-  }
-});
+// Brevo API setup
+const apiInstance = new Brevo.TransactionalEmailsApi();
+apiInstance.setApiKey(
+  Brevo.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
 
 // TRACK VISITOR API
 app.post("/track-visitor", async (req, res) => {
@@ -38,19 +21,19 @@ app.post("/track-visitor", async (req, res) => {
     const browser = req.body.browser || "Unknown browser";
     const time = new Date().toLocaleString();
 
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM,
-      to: process.env.EMAIL_TO,
-      subject: `New Portfolio Visitor`,
-      text: `Browser: ${browser}\nTime: ${time}`,
+    await apiInstance.sendTransacEmail({
+      sender: { email: process.env.SMTP_FROM },
+      to: [{ email: process.env.EMAIL_TO }],
+      subject: "New Portfolio Visitor",
+      textContent: `Browser: ${browser}\nTime: ${time}`
     });
 
-    console.log("Email sent!");
+    console.log("Email sent via Brevo API!");
     res.json({ success: true });
 
-  } catch (err) {
-    console.error("Error sending email:", err);
-    res.status(500).json({ success: false, error: "Email sending failed" });
+  } catch (error) {
+    console.error("Brevo API Error:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
